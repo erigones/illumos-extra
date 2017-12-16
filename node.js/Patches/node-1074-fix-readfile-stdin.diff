@@ -1,0 +1,26 @@
+diff -Naur node-v0.10.26.old/lib/fs.js node-v0.10.26/lib/fs.js
+--- node-v0.10.26.old/lib/fs.js	2014-02-19 00:34:29.000000000 +0100
++++ node-v0.10.26/lib/fs.js	2017-12-16 00:54:39.000000000 +0100
+@@ -209,7 +209,7 @@
+ 
+     fs.fstat(fd, function(er, st) {
+       if (er) return callback(er);
+-      size = st.size;
++      size = st.isFile() ? st.size : 0;
+       if (size === 0) {
+         // the kernel lies about many files.
+         // Go ahead and try to read some bytes.
+@@ -283,10 +283,12 @@
+   var flag = options.flag || 'r';
+   var fd = fs.openSync(path, flag, 438 /*=0666*/);
+ 
++  var st;
+   var size;
+   var threw = true;
+   try {
+-    size = fs.fstatSync(fd).size;
++    st = fs.fstatSync(fd);
++    size = st.isFile() ? st.size : 0;
+     threw = false;
+   } finally {
+     if (threw) fs.closeSync(fd);
