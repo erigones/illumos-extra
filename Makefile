@@ -10,7 +10,7 @@
 #
 
 #
-# Copyright (c) 2018, Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 #
@@ -172,10 +172,10 @@ $(SUBDIRS): $(DESTDIR)/usr/gcc/$(PRIMARY_COMPILER_VER)/bin/gcc
 	    STRAP=$(STRAP) \
 	    CTFMERGE=$(CTFMERGE) \
 	    CTFCONVERT=$(CTFCONVERT) \
-	    ALTCTFCONVERT=$(ALTCTFCONVERT) \
 	    $(MAKE) DESTDIR=$(DESTDIR) install)
 
 $(STRAPFIX_SUBDIRS): $(SUBDIRS)
+	@echo "========== strapfix building $@ =========="
 	(cd $$(basename $@ .strapfix) && \
 	    PKG_CONFIG_LIBDIR="" \
 	    STRAP=$(STRAP) \
@@ -206,7 +206,6 @@ $(SUBDIRS): $(PRIMARY_COMPILER)
 	    STRAP=$(STRAP) \
 	    CTFMERGE=$(CTFMERGE) \
 	    CTFCONVERT=$(CTFCONVERT) \
-	    ALTCTFCONVERT=$(ALTCTFCONVERT) \
 	    $(MAKE) DESTDIR=$(DESTDIR) install)
 
 install: $(PRIMARY_COMPILER) $(SUBDIRS)
