@@ -18,12 +18,16 @@
 #
 # CDDL HEADER END
 #
-# Copyright (c) 2012, Joyent, Inc.  All rights reserved.
+# Copyright 2019 Joyent, Inc.
 #
 
-VER =	tun-1.3
+VER = tun-1.3
 
 include ../Makefile.defs
+
+ifneq ($(PRIMARY_COMPILER_VER),4)
+CFLAGS.64 += -fno-shrink-wrap
+endif
 
 BUILD32 =
 BUILD64 = yes

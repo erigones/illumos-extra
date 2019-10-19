@@ -19,10 +19,10 @@
 # CDDL HEADER END
 #
 # Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
-# Copyright 2015 Joyent, Inc.
+# Copyright 2019 Joyent, Inc.
 #
 
-VER =	openssh-portable-7.4p1
+VER =	openssh-portable-7.9p1
 
 include ../Makefile.defs
 
@@ -41,7 +41,6 @@ AUTOCONF_OPTS += \
 	--with-solaris-privs \
 	--with-tcp-wrappers \
 	--with-4in6 \
-	--with-xauth=/usr/bin/xauth \
 	--with-Werror=no \
 	--enable-strip=no \
 	--without-rpath \
@@ -51,11 +50,23 @@ AUTOCONF_OPTS += \
 	--with-key-dir=/var/ssh \
 	--with-sys-moduli=/usr/share/lib/ssh/moduli
 
+#
+# On SmartOS we want to use the xauth from pkgsrc for our X11 forwarding,
+# since we don't ship X11 in the base system at all (and thus won't have a
+# /usr/bin/xauth or /usr/X11/bin/xauth or similar). If it's not present
+# that's no problem (the code handles this and just won't do transitive
+# forwarding).
+#
+# We don't/can't use the platform sshd for LX branded zones, where this
+# path would be incorrect, and the sngl brand is dead, so building the
+# pkgsrc path in here should be fine.
+#
+AUTOCONF_OPTS += \
+	--with-xauth=/opt/local/bin/xauth
+
 AUTOCONF_ENV += \
 	DESTDIR="$(DESTDIR)" \
-	CTFMERGE="$(CTFMERGE)" \
-	CTFCONVERT="$(CTFCONVERT)" \
-	ALTCTFCONVERT="$(ALTCTFCONVERT)"
+	CTFCONVERT="$(CTFCONVERT)"
 
 CFLAGS += \
 	-O2 -gdwarf-2 \

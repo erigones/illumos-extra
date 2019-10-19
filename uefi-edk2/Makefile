@@ -10,7 +10,7 @@
 #
 
 #
-# Copyright 2018 Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 
@@ -28,14 +28,18 @@ MAKE_ARGS+=	AS=$(STRAPPROTO)/usr/gnu/bin/gas \
 		AR=$(STRAPPROTO)/usr/gnu/bin/gar \
 		LD=$(STRAPPROTO)/usr/gnu/bin/gld \
 		OBJCOPY=$(STRAPPROTO)/usr/gnu/bin/gobjcopy \
-		CC=$(STRAPPROTO)/usr/bin/gcc \
-		CXX=$(STRAPPROTO)/usr/bin/g++
+		CC="$(CC)" CXX="$(CXX)"
 
 ARCH=		X64
 UEFI_TARGET=	RELEASE
 
+ROMS=		uefi uefi-csm
 
-all: $(VER.64)/$(UNPACK_SENTINEL)
+.NOTPARALLEL: $(ROMS) csm16
+
+all: $(ROMS)
+
+basetools: $(VER.64)/$(UNPACK_SENTINEL)
 	mkdir -p $(VER.64)/Build
 	ln -sf $(STRAPPROTO)/usr/bin/gcc $(VER.64)/Build/gcc
 	ln -sf $(STRAPPROTO)/usr/gnu/bin/gld $(VER.64)/Build/ld
@@ -44,11 +48,30 @@ all: $(VER.64)/$(UNPACK_SENTINEL)
 	ln -sf $(STRAPPROTO)/usr/gnu/bin/gobjcopy $(VER.64)/Build/objcopy
 	ln -sf /opt/local/bin/nasm $(VER.64)/Build/nasm
 	$(MAKE) $(MAKE_ARGS) ARCH=$(ARCH) -C $(VER.64)/BaseTools
-	bash -c "cd $(VER.64); source edksetup.sh; $(MAKE) $(MAKE_ARGS) ARCH=$(ARCH) -C BhyvePkg/Csm/BhyveCsm16"
-	bash -c "cd $(VER.64); source edksetup.sh; export ILGCC_BIN=$(PWD)/$(VER.64)/Build/; build -t ILGCC -a $(ARCH) -b $(UEFI_TARGET) -p BhyvePkg/BhyvePkgX64.dsc -DDEBUG_ON_SERIAL_PORT=TRUE -DFD_SIZE_2MB -DCSM_ENABLE=TRUE"
-	mv $(VER.64)/Build/BhyveX64/RELEASE_ILGCC/FV/BHYVE.fd $(VER.64)/Build/BhyveX64/RELEASE_ILGCC/FV/uefi-csm-rom.bin
+
+csm16:
+	bash -c "cd $(VER.64); \
+		source edksetup.sh; \
+		$(MAKE) $(MAKE_ARGS) ARCH=$(ARCH) -C BhyvePkg/Csm/BhyveCsm16"
+
+uefi-csm: csm16
+
+$(ROMS): basetools
+	rm -rf $(VER.64)/Build/BhyveX64
+	bash -c 'cd $(VER.64); \
+		source edksetup.sh; \
+		export ILGCC_BIN=$(PWD)/$(VER.64)/Build/; \
+		[[ $@ == uefi-csm ]] && extra_cflags=-DCSM_ENABLE=TRUE; \
+		build -t ILGCC -a $(ARCH) -b $(UEFI_TARGET) \
+			-p BhyvePkg/BhyvePkgX64.dsc \
+			-DDEBUG_ON_SERIAL_PORT=TRUE -DFD_SIZE_1MB \
+			$${extra_cflags}'
+	mv $(VER.64)/Build/BhyveX64/RELEASE_ILGCC/FV/BHYVE.fd \
+		$(VER.64)/Build/$@-rom.bin
 
 install: all
 	mkdir -p $(DESTDIR)/usr/share/bhyve
-	/usr/sbin/install -m 0755 -f $(DESTDIR)/usr/share/bhyve $(VER.64)/Build/BhyveX64/RELEASE_ILGCC/FV/uefi-csm-rom.bin
-
+	for rom in $(ROMS); do \
+		/usr/sbin/install -m 0755 -f $(DESTDIR)/usr/share/bhyve \
+		    $(VER.64)/Build/$$rom-rom.bin; \
+	done

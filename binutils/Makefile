@@ -18,16 +18,24 @@
 #
 # CDDL HEADER END
 #
-# Copyright 2017, Joyent, Inc.
+# Copyright 2018, Joyent, Inc.
 #
 
 VER =	binutils-2.25.1
 
 include ../Makefile.defs
 
+#
+# binutils configure ignores $CPPFLAGS, so pass our needed changes through
+# $CFLAGS.
+#
+CFLAGS += $(CPPFLAGS)
+
 TARBALL =		$(VER).tar.bz2
 TARBALL_COMPRESS =	-j
 AUTOCONF_OPTS = \
+	--build=i386-pc-solaris2.11 \
+	--host=i386-pc-solaris2.11 \
 	--prefix=/usr/gnu \
 	--enable-64-bit-bfd \
 	--program-prefix=g

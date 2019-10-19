@@ -10,18 +10,31 @@
 #
 
 #
-# Copyright (c) 2017, Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 #
 # To build everything just run 'gmake' in this directory.
 #
 
-BASE =		$(PWD)
+include $(CURDIR)/../../build.env
+
+BASE =		$(CURDIR)
 DESTDIR =	$(BASE)/proto
 
+#
+# This contains items that we only build during the strap build itself.
+#
+STRAP_ONLY = \
+	idnkit
+
 ifeq ($(STRAP),strap)
+
 STRAPPROTO =	$(DESTDIR)
+
+COMMA=,
+EXTRA_COMPILERS = $(subst $(COMMA), , $(SHADOW_COMPILERS))
+
 SUBDIRS = \
 	cpp \
 	bzip2 \
@@ -29,13 +42,20 @@ SUBDIRS = \
 	libidn \
 	libxml \
 	libz \
-	make \
 	node.js \
 	nss-nspr \
 	openssl1x \
-	perl
+	perl \
+	$(EXTRA_COMPILERS) \
+	$(STRAP_ONLY)
+
+STRAPFIX +=	$(PRIMARY_COMPILER) $(EXTRA_COMPILERS)
+STRAPFIX_SUBDIRS=$(STRAPFIX:%=%.strapfix)
+
 else
+
 STRAPPROTO =	$(DESTDIR:proto=proto.strap)
+
 SUBDIRS = \
 	bash \
 	bind \
@@ -44,7 +64,6 @@ SUBDIRS = \
 	cpp \
 	curl \
 	dialog \
-	g11n \
 	gnupg \
 	gtar \
 	gzip \
@@ -55,7 +74,6 @@ SUBDIRS = \
 	libidn2 \
 	libxml \
 	libz \
-	make \
 	mdb_v8 \
 	ncurses \
 	node.js \
@@ -78,6 +96,8 @@ SUBDIRS = \
 	wget \
 	xz
 
+STRAPFIX_SUBDIRS =
+
 endif
 
 PATH =		$(STRAPPROTO)/usr/bin:/usr/bin:/usr/sbin:/sbin:/opt/local/bin
@@ -96,18 +116,9 @@ GITDESCRIBE = \
 
 TARBALL =	$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
 
-#
-# Some software (e.g., OpenSSL 0.9.8) is very particular about the Perl
-# interpreter used during the build.  This is the full path to the version
-# built during the strap build, which is safe to use on the build machine.
-#
-# This definition would perhaps more appropriately appear in "Makefile.defs",
-# but that file is not used in the OpenSSL 0.9.8 build and is also not included
-# by this file; absent deeper refactoring, we shall pass it via the environment
-# in the $(SUBDIRS) target below.
-#
-NATIVE_PERL =	$(STRAPPROTO)/usr/perl5/5.12/bin/perl
-
+LIBSTDCXXVER_4 = 6.0.13
+LIBSTDCXXVER_6 = 6.0.22
+LIBSTDCXXVER_7 = 6.0.24
 
 all: $(SUBDIRS)
 
@@ -120,7 +131,6 @@ dialog: ncurses
 socat: openssl1x
 wget: openssl1x libidn
 openldap: openssl1x
-g11n: make
 ntp: perl openssl1x
 openssh: openssl1x
 
@@ -133,40 +143,81 @@ openssh: openssl1x
 # gets appended.
 #
 
+
 $(DESTDIR)/usr/gnu/bin/gas: FRC
 	(cd binutils && \
 	    PKG_CONFIG_LIBDIR="" \
 	    STRAP=$(STRAP) \
 	    $(MAKE) DESTDIR=$(DESTDIR) install)
 
+#
+# gcc lives in a different prefix when building the bootstrap, but not
+# gas.
+#
+ifeq ($(STRAP),strap)
 
-$(DESTDIR)/usr/bin/gcc: $(DESTDIR)/usr/gnu/bin/gas
-	(cd gcc4 && \
+$(DESTDIR)/usr/gcc/$(PRIMARY_COMPILER_VER)/bin/gcc: $(DESTDIR)/usr/gnu/bin/gas
+	@echo "========== building $@ =========="
+	(cd $(PRIMARY_COMPILER) && \
 	    PKG_CONFIG_LIBDIR="" \
 	    STRAP=$(STRAP) \
 	    $(MAKE) DESTDIR=$(DESTDIR) install strapfix)
 
-$(SUBDIRS): $(DESTDIR)/usr/bin/gcc
+$(SUBDIRS): $(DESTDIR)/usr/gcc/$(PRIMARY_COMPILER_VER)/bin/gcc
+	@echo "========== strap building $@ =========="
 	(cd $@ && \
 	    PKG_CONFIG_LIBDIR="" \
 	    STRAP=$(STRAP) \
 	    CTFMERGE=$(CTFMERGE) \
 	    CTFCONVERT=$(CTFCONVERT) \
-	    ALTCTFCONVERT=$(ALTCTFCONVERT) \
-	    NATIVE_PERL=$(NATIVE_PERL) \
 	    $(MAKE) DESTDIR=$(DESTDIR) install)
 
-install: $(SUBDIRS) gcc4 binutils
+$(STRAPFIX_SUBDIRS): $(SUBDIRS)
+	@echo "========== strapfix building $@ =========="
+	(cd $$(basename $@ .strapfix) && \
+	    PKG_CONFIG_LIBDIR="" \
+	    STRAP=$(STRAP) \
+	    PRIMARY_COMPILER=$(PRIMARY_COMPILER) \
+	    $(MAKE) DESTDIR=$(DESTDIR) strapfix)
 
-install_strap: $(SUBDIRS) gcc4 binutils
+fixup_strap: $(STRAPFIX_SUBDIRS)
+
+install_strap: binutils $(PRIMARY_COMPILER) $(SUBDIRS) fixup_strap
+
+else
+
+#
+# For the non-strap build, we just need the runtime libraries to be in place in
+# the proto dir.
+#
+$(PRIMARY_COMPILER):
+	@echo "========== building $@ =========="
+	(cd $(PRIMARY_COMPILER) && \
+	    PKG_CONFIG_LIBDIR="" \
+	    STRAP=$(STRAP) \
+	    $(MAKE) DESTDIR=$(DESTDIR) fixup)
+
+$(SUBDIRS): $(PRIMARY_COMPILER)
+	@echo "========== building $@ =========="
+	(cd $@ && \
+	    PKG_CONFIG_LIBDIR="" \
+	    STRAP=$(STRAP) \
+	    CTFMERGE=$(CTFMERGE) \
+	    CTFCONVERT=$(CTFCONVERT) \
+	    $(MAKE) DESTDIR=$(DESTDIR) install)
+
+install: $(PRIMARY_COMPILER) $(SUBDIRS)
+
+endif
 
 clean:
-	-for dir in $(SUBDIRS) gcc4 binutils; \
+	-for dir in $(PRIMARY_COMPILER) $(SUBDIRS) $(STRAP_ONLY) binutils; \
 	    do (cd $$dir; $(MAKE) DESTDIR=$(DESTDIR) clean); done
 	-rm -rf proto
 
 manifest:
-	cp manifest $(DESTDIR)/$(DESTNAME)
+	sed 's/$$LIBSTDCXXVER/$(LIBSTDCXXVER_$(PRIMARY_COMPILER_VER))/g' \
+	    manifest >$(DESTDIR)/$(DESTNAME)
 
 mancheck_conf:
 	cp mancheck.conf $(DESTDIR)/$(DESTNAME)
@@ -176,4 +227,4 @@ tarball:
 
 FRC:
 
-.PHONY: manifest mancheck_conf
+.PHONY: $(PRIMARY_COMPILER) $(SUBDIRS) binutils manifest mancheck_conf

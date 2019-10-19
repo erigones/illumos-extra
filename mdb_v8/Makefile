@@ -10,7 +10,7 @@
 #
 
 #
-# Copyright (c) 2018, Joyent, Inc.
+# Copyright 2019 Joyent, Inc.
 #
 
 #
@@ -23,7 +23,7 @@
 # 3. From one directory up, run tar cvzf mdb_v8-<ver>.tar.gz mdb_v8-<ver>
 #
 
-VER =	mdb_v8-1.3.0
+VER =	mdb_v8-1.4.1
 
 include ../Makefile.defs
 include ../Makefile.targ
@@ -36,7 +36,8 @@ CTF_LIBS = $(VER)/build/ia32/mdb_v8.so \
 #
 # Required for CTF generation
 #
-CFLAGS += -g
+CFLAGS += -gdwarf-2
+CFLAGS_ARCH += -gdwarf-2
 
 #
 # There are a couple of bugs in the currently released version of mdb_v8
@@ -46,14 +47,15 @@ CFLAGS += -g
 #
 all: $(VER)/GNUMakefile
 	cd $(VER) && \
-	    env - $(AUTOCONF_ENV) PATH=$(PATH) $(MAKE) $(OVERRIDES) release
+	    env - $(AUTOCONF_ENV) CFLAGS_ARCH=$(CFLAGS_ARCH) \
+	    PATH=$(PATH) $(MAKE) $(OVERRIDES) release
 
 install: all
 	rm -f $(DESTDIR)/usr/lib/mdb/proc/v8.so
-	$(ALTCTFCONVERT) -l $(VER) -o $(DESTDIR)/usr/lib/mdb/proc/v8.so \
+	$(CTFCONVERT) -l $(VER) -o $(DESTDIR)/usr/lib/mdb/proc/v8.so \
 	    $(VER)/build/ia32/mdb_v8.so
 	rm -f $(DESTDIR)/usr/lib/mdb/proc/amd64/v8.so
-	$(ALTCTFCONVERT) -l $(VER) -o $(DESTDIR)/usr/lib/mdb/proc/amd64/v8.so \
+	$(CTFCONVERT) -l $(VER) -o $(DESTDIR)/usr/lib/mdb/proc/amd64/v8.so \
 	    $(VER)/build/amd64/mdb_v8.so
 
 $(VER)/GNUMakefile: $(VER).tar.gz

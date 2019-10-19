@@ -10,7 +10,7 @@
 #
 
 #
-# Copyright 2016 Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 
@@ -55,7 +55,8 @@ NATIVE_SHARED_LDFLAGS = \
 
 PATCHES += \
 	dtrace.patch \
-	native.patch
+	native.patch \
+	fix-gcc-errno.patch
 
 #
 # This is where things get really gross.  There is stuff in ON that is going
@@ -148,7 +149,7 @@ $(CONFIG_PL): $(CONFIG_PL).in Makefile
 
 $(VER.32)/cflags: $(VER.32)/config.over $(VER.32)/Configure
 	(cd $(VER.32) && \
-	    ./Configure -des -Dcc=$(GCC) -Duse64bitint)
+	    ./Configure -des -Dcc="$(GCC)" -Duse64bitint)
 
 $(VER.32)/perldtrace.h: $(VER.32)/cflags
 	(cd $(VER.32) && \

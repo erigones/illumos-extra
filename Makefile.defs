@@ -10,11 +10,14 @@
 #
 
 #
-# Copyright (c) 2017, Joyent, Inc.
+# Copyright 2019 Joyent, Inc.
 #
 
 BASE =		$(PWD)
 DESTDIR =	$(BASE)/../proto
+
+include $(BASE)/../../../build.env
+
 VER.32 =	$(VER)-32$(STRAP)
 VER.64 =	$(VER)-64$(STRAP)
 OBJ.32 =	$(VER.32)$(SEPARATE_BUILD:yes=.build)
@@ -22,10 +25,17 @@ OBJ.64 =	$(VER.64)$(SEPARATE_BUILD:yes=.build)
 CTF.32 =	ctfobjects-32$(STRAP)
 CTF.64 =	ctfobjects-64$(STRAP)
 
+FETCH_BASE =	https://us-east.manta.joyent.com/Joyent_Dev/public/illumos-extra
+
 ifeq ($(STRAP),strap)
 STRAPPROTO =	$(DESTDIR)
+GCC =		$(DESTDIR)/usr/gcc/$(PRIMARY_COMPILER_VER)/bin/gcc
+GXX =		$(DESTDIR)/usr/gcc/$(PRIMARY_COMPILER_VER)/bin/g++
+LIBSTDCXX_RUNPATH = usr/gcc/$(PRIMARY_COMPILER_VER)/lib
 else
 STRAPPROTO =	$(DESTDIR:proto=proto.strap)
+GCC =		$(STRAPPROTO)/usr/bin/gcc
+GXX =		$(STRAPPROTO)/usr/bin/g++
 endif
 
 PATH =		$(STRAPPROTO)/usr/bin:/usr/bin:/usr/sbin:/sbin:/opt/local/bin
@@ -34,15 +44,20 @@ MAKE =		gmake
 MAX_JOBS =	128
 PARALLEL =	-j$(MAX_JOBS)
 MAKE_VERBOSE =	V=1
-GCC =		$(DESTDIR)/usr/bin/gcc
-GXX =		$(DESTDIR)/usr/bin/g++
 GCC.64 =	$(GCC) -m64
 GXX.64 =	$(GXX) -m64
 
-GCC.host =	/opt/local/bin/gcc
-GXX.host =	/opt/local/bin/g++
+# The version of gcc in /opt/local/bin varies depending on the pkgsrc release
+GCC.host_prefix ?= /opt/local/bin
+GCC.host =	$(GCC.host_prefix)/gcc
+GXX.host =	$(GCC.host_prefix)/g++
 GCC.host.64 =	$(GCC.host) -m64
 GXX.host.64 =	$(GXX.host) -m64
+
+# We need gcc 4.x in order to build our copy of gcc 4.4. This is set by
+# 'configure' in smartos-live.
+GCC4.host =	$(HOST_GCC4_PREFIX)/gcc
+GXX4.host =	$(HOST_GCC4_PREFIX)/g++
 
 LEX = 		/opt/local/bin/lex
 YACC = 		/opt/local/bin/yacc
@@ -56,6 +71,17 @@ BUILD64 =
 SEPARATE_BUILD =
 
 CPPFLAGS =	$(SYSINCDIRS:%=-isystem $(DESTDIR)/%)
+
+#
+# As we ship some rather downrev software, there's a good chance it might fall
+# foul of newer GCC's undefined-behavior optimizations; skip those. As it's in
+# general painful to ensure that $(CFLAGS) gets passed down correctly, we'll
+# just set it directly as the compiler...
+#
+ifneq ($(PRIMARY_COMPILER_VER),4)
+GCC += -fno-aggressive-loop-optimizations
+GXX += -fno-aggressive-loop-optimizations
+endif
 
 #
 # We ship platform-private perl modules (e.g. from ntp) in this directory,
@@ -155,7 +181,7 @@ APPLY_PATCHES.64 = \
 	    $(GPATCH) -d .unpack64/$(VER) -p$(PATCHSTRIP) < "$$p" || exit 1; \
 	    done
 
-MAKE_CTF =		$(BASE)/../tools/make-ctf
+MAKE_CTF =		CTFCONVERTFLAGS=$(CTFCONVERTFLAGS) $(BASE)/../tools/make-ctf
 MAKE_CTF.32 =		$(MAKE_CTF) $(OBJ.32) $(CTF.32) $(VER)
 MAKE_CTF.64 =		$(MAKE_CTF) $(OBJ.64) $(CTF.64) $(VER)
 
